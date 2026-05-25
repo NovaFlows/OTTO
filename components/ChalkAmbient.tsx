@@ -34,7 +34,7 @@ export default function ChalkAmbient() {
     window.addEventListener('resize', sizeLayer)
     const sizeInterval = window.setInterval(sizeLayer, 1500)
 
-    const MAX = 5
+    const MAX = 7
     const rand = (a: number, b: number) => a + Math.random() * (b - a)
     const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)]
 
@@ -114,7 +114,7 @@ export default function ChalkAmbient() {
           svg.appendChild(c)
         }
       }
-      mountSVG(svg, rand(1800, 3400))
+      mountSVG(svg, rand(3600, 6800))
     }
 
     // ── TYPE B : traînée longue (envol) ──────────────────
@@ -137,7 +137,7 @@ export default function ChalkAmbient() {
       path.style.cssText = `stroke-dasharray:900;stroke-dashoffset:900;animation:chalkDraw ${dur}s ease-out forwards;`
       svg.appendChild(path)
       svg.dataset.drawMs = (dur * 1000).toString()
-      mountSVG(svg, rand(2200, 3800), 3000)
+      mountSVG(svg, rand(4400, 7600), 3000)
     }
 
     // ── TYPE C : coulures verticales ─────────────────────
@@ -173,7 +173,7 @@ export default function ChalkAmbient() {
         svg.appendChild(path)
       }
       svg.dataset.drawMs = (maxDur * 1000 + 700).toString()
-      mountSVG(svg, rand(1800, 3200))
+      mountSVG(svg, rand(3600, 6400))
     }
 
     // ── TYPE D : éclaboussures pures ─────────────────────
@@ -183,18 +183,18 @@ export default function ChalkAmbient() {
       const { x, y } = spawnPos(w, h)
       const sc = rand(0.6, 1.4)
       const rot = rand(0, 360)
-      const op = rand(0.15, 0.28)
+      const op = rand(0.30, 0.55)
       svg.style.cssText = `position:absolute;left:${x}px;top:${y}px;transform:scale(${sc}) rotate(${rot}deg);transform-origin:center;color:rgb(var(--trace-color));opacity:${op};transition:opacity 2.4s ease;`
 
-      const count = Math.floor(rand(12, 26))
+      const count = Math.floor(rand(22, 42))
       let maxEnd = 0
       for (let i = 0; i < count; i++) {
         const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
-        const r = Math.sqrt(Math.random()) * 56
+        const r = Math.sqrt(Math.random()) * 62
         const a = Math.random() * Math.PI * 2
         c.setAttribute('cx', (65 + Math.cos(a) * r).toFixed(1))
         c.setAttribute('cy', (65 + Math.sin(a) * r).toFixed(1))
-        c.setAttribute('r', rand(0.35, 1.7).toFixed(2))
+        c.setAttribute('r', rand(0.6, 2.4).toFixed(2))
         c.setAttribute('fill', 'currentColor')
         const delay = rand(0, 1.6)
         const dur = rand(1.6, 2.6)
@@ -203,7 +203,7 @@ export default function ChalkAmbient() {
         svg.appendChild(c)
       }
       svg.dataset.drawMs = (maxEnd * 1000).toString()
-      mountSVG(svg, rand(900, 2000), 2200)
+      mountSVG(svg, rand(1800, 4000), 2200)
     }
 
     // ── TYPE E : zigzag scratchy ─────────────────────────
@@ -231,15 +231,15 @@ export default function ChalkAmbient() {
       path.style.cssText = `stroke-dasharray:780;stroke-dashoffset:780;animation:chalkDraw ${dur}s ease-out forwards;`
       svg.appendChild(path)
       svg.dataset.drawMs = (dur * 1000).toString()
-      mountSVG(svg, rand(1600, 2800))
+      mountSVG(svg, rand(3200, 5600))
     }
 
     // ── Ordonnanceur ─────────────────────────────────────
     const spawners = [
-      spawnShortStroke, spawnShortStroke, spawnShortStroke,
-      spawnLongTrail, spawnLongTrail,
+      spawnShortStroke, spawnShortStroke,
+      spawnLongTrail,
       spawnDrips,
-      spawnSplatter, spawnSplatter,
+      spawnSplatter, spawnSplatter, spawnSplatter, spawnSplatter,
       spawnScratch,
     ]
 
@@ -249,7 +249,7 @@ export default function ChalkAmbient() {
       if (layer.children.length < MAX) {
         pick(spawners)()
       }
-      window.setTimeout(tick, rand(1500, 3500))
+      window.setTimeout(tick, rand(800, 2000))
     }
 
     // Démarrage : quelques jets initiaux + tick

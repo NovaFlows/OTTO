@@ -52,7 +52,7 @@ export default async function HomePage() {
       <HeroAnimated />
 
       {/* ── GALERIE PREVIEW ── */}
-      <section className="px-6 md:px-12 py-20">
+      <section className="px-6 md:px-12 py-24">
         <FadeIn>
           <div className="flex items-end justify-between mb-12">
             <div>
@@ -84,7 +84,7 @@ export default async function HomePage() {
 
       {/* ── CITATION ── */}
       <div className="px-6 md:px-12"><ChalkDivider /></div>
-      <section className="px-6 md:px-16 lg:px-32 py-20">
+      <section className="px-6 md:px-16 lg:px-32 py-28">
         <FadeIn>
           <blockquote
             className="font-serif italic text-otto-chalk text-center mx-auto max-w-3xl leading-snug"
@@ -102,7 +102,7 @@ export default async function HomePage() {
 
       {/* ── PROCESS ── */}
       <div className="px-6 md:px-12"><ChalkDivider /></div>
-      <section id="process" className="px-6 md:px-12 py-20">
+      <section id="process" className="px-6 md:px-12 py-24">
         <FadeIn>
           <h2
             className="font-serif font-light italic text-otto-chalk mb-2"
@@ -116,39 +116,42 @@ export default async function HomePage() {
         </FadeIn>
 
         <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory">
-          {[
-            { label: 'Interview I',  sub: 'La naissance d\'une œuvre' },
-            { label: 'Interview II', sub: 'Le geste et la matière'    },
-            { label: 'Interview III',sub: 'Ce que peindre veut dire'  },
-          ].map((item, i) => (
+          {[1, 2, 3].map((i) => (
             <FadeIn key={i} delay={i * 120} className="flex-none w-[260px] snap-center">
-              <div
-                className="bg-otto-charcoal border border-white/5 hover:border-white/10 transition-colors duration-300 cursor-default"
+              <a
+                href="https://www.tiktok.com/@ottodrewit"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block bg-otto-charcoal hover:bg-[#161616] transition-colors duration-300"
                 style={{ aspectRatio: '9/16' }}
               >
-                <div className="h-full flex flex-col items-center justify-center gap-4 p-6">
-                  {/* Play icon */}
-                  <div className="w-11 h-11 rounded-full border border-white/15 flex items-center justify-center">
+                <div className="h-full flex flex-col items-center justify-center gap-3 p-6">
+                  <div className="w-10 h-10 rounded-full border border-white/20 flex items-center justify-center">
                     <svg className="w-3.5 h-3.5 text-otto-grey ml-0.5" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M8 5v14l11-7z" />
                     </svg>
                   </div>
-                  <div className="text-center">
-                    <p className="font-mono text-otto-chalk text-[10px] uppercase tracking-[0.2em]">
-                      {item.label}
-                    </p>
-                    <p className="font-serif italic text-otto-grey text-[13px] mt-1.5 leading-tight">
-                      {item.sub}
-                    </p>
-                  </div>
-                  <p className="font-mono text-otto-grey/40 text-[9px] uppercase tracking-[0.15em]">
-                    À venir
+                  <p className="font-mono text-otto-grey text-[10px] uppercase tracking-[0.2em] text-center">
+                    @ottodrewit
                   </p>
                 </div>
-              </div>
+              </a>
             </FadeIn>
           ))}
         </div>
+
+        <FadeIn delay={200}>
+          <div className="mt-10">
+            <a
+              href="https://www.tiktok.com/@ottodrewit"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-[11px] text-otto-grey hover:text-otto-chalk uppercase tracking-[0.18em] transition-colors duration-200 link-underline"
+            >
+              Voir sur TikTok →
+            </a>
+          </div>
+        </FadeIn>
       </section>
 
       <Footer />

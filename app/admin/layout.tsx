@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen relative" style={{ backgroundColor: '#ECEAE4', color: '#111' }}>
+    <div data-theme="light" className="min-h-screen relative" style={{ backgroundColor: '#ECEAE4', color: '#111' }}>
 
       {/* Dégradés — même logique que la page principale */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>

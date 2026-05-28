@@ -222,6 +222,43 @@ export async function addOrderNote(orderId: string, notes: string) {
   revalidatePath(`/admin/commandes/${orderId}`)
 }
 
+/* ── Contact ── */
+
+export async function sendContactEmail(formData: FormData) {
+  const prenom  = (formData.get('prenom')  as string)?.trim()
+  const email   = (formData.get('email')   as string)?.trim()
+  const sujet   = (formData.get('sujet')   as string) ?? 'Autre'
+  const message = (formData.get('message') as string)?.trim()
+
+  if (!prenom || !email || !message) return { error: 'Merci de remplir tous les champs.' }
+
+  if (!process.env.RESEND_API_KEY) return { success: true }
+
+  try {
+    const { Resend } = await import('resend')
+    const resend = new Resend(process.env.RESEND_API_KEY)
+    await resend.emails.send({
+      from: process.env.EMAIL_FROM ?? 'Otto <noreply@ottodrewit.com>',
+      to:   process.env.EMAIL_OTTO ?? 'otto@ottodrewit.com',
+      replyTo: email,
+      subject: `[Contact] ${sujet} — ${prenom}`,
+      html: `
+        <div style="font-family:monospace;max-width:560px;margin:0 auto;padding:40px 20px;background:#060606;color:#F2F0EB;">
+          <p style="font-size:10px;text-transform:uppercase;letter-spacing:0.2em;color:#8A8A8A;margin-bottom:24px;">Nouveau message — ${sujet}</p>
+          <p style="margin-bottom:4px;"><strong>${prenom}</strong></p>
+          <p style="color:#8A8A8A;margin-bottom:32px;">${email}</p>
+          <p style="line-height:1.8;">${message.replace(/\n/g, '<br>')}</p>
+          <hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:40px 0;"/>
+          <p style="color:#8A8A8A;font-size:11px;">ottodrewit.com</p>
+        </div>
+      `,
+    })
+    return { success: true }
+  } catch {
+    return { success: true }
+  }
+}
+
 /* ── Email helpers ── */
 
 function buildTrackingEmail(order: any): string {

@@ -33,22 +33,24 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session) {
   const { createAdminClient } = await import('@/lib/supabase-server')
   const supabase = await createAdminClient()
 
-  const oeuvreId   = session.metadata?.oeuvre_id
-  const oeuvreSlug = session.metadata?.oeuvre_slug
+  // Support panier multi-articles (oeuvre_ids) et ancien format (oeuvre_id)
+  const oeuvreIdsRaw = session.metadata?.oeuvre_ids
+  const oeuvreIds: string[] = oeuvreIdsRaw
+    ? oeuvreIdsRaw.split(',').filter(Boolean)
+    : session.metadata?.oeuvre_id ? [session.metadata.oeuvre_id] : []
 
-  if (!oeuvreId) {
-    console.error('No oeuvre_id in session metadata')
+  const quantitiesRaw = session.metadata?.oeuvre_quantities
+  const quantities: number[] = quantitiesRaw
+    ? quantitiesRaw.split(',').map(Number)
+    : oeuvreIds.map(() => 1)
+
+  if (!oeuvreIds.length) {
+    console.error('No oeuvre_ids in session metadata')
     return
   }
 
-  // Récupère l'œuvre
-  const { data: oeuvre } = await supabase
-    .from('oeuvres')
-    .select('*')
-    .eq('id', oeuvreId)
-    .single()
+  const { data: oeuvres } = await supabase.from('oeuvres').select('*').in('id', oeuvreIds)
 
-  // Adresse de livraison
   const addr = session.shipping_details?.address
   const shipping_address = addr ? {
     line1:       addr.line1 ?? '',
@@ -58,84 +60,96 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session) {
     country:     addr.country ?? '',
   } : null
 
-  // Numéro de commande séquentiel
-  const { count } = await supabase.from('commandes').select('id', { count: 'exact' }).single()
-  const orderNumber = `OTTO-${new Date().getFullYear()}-${String((count ?? 0) + 1).padStart(4, '0')}`
+  const buyerName  = session.shipping_details?.name ?? session.customer_details?.name ?? 'Client'
+  const buyerEmail = session.customer_details?.email ?? ''
+  const buyerPhone = session.customer_details?.phone ?? null
+  const shippingCost = session.shipping_cost?.amount_total ?? 0
+  const totalStr = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format((session.amount_total ?? 0) / 100)
 
-  // Crée la commande
-  const { data: commande, error } = await supabase.from('commandes').insert({
-    order_number:                orderNumber,
-    buyer_name:                  session.shipping_details?.name ?? session.customer_details?.name ?? 'Client',
-    buyer_email:                 session.customer_details?.email ?? '',
-    buyer_phone:                 session.customer_details?.phone ?? null,
-    shipping_address:            shipping_address,
-    oeuvre_id:                   oeuvreId,
-    stripe_session_id:           session.id,
-    stripe_payment_intent_id:    typeof session.payment_intent === 'string' ? session.payment_intent : null,
-    amount_subtotal:             session.amount_subtotal ?? 0,
-    amount_shipping:             session.shipping_cost?.amount_total ?? 0,
-    amount_total:                session.amount_total ?? 0,
-    status:                      'paid',
-  }).select().single()
+  // Crée une commande par œuvre
+  const { count: existingCount } = await supabase.from('commandes').select('id', { count: 'exact' })
+  let baseCount = existingCount ?? 0
 
-  if (error) {
-    console.error('Failed to create commande:', error)
-    return
+  const createdCommandes: any[] = []
+
+  for (let i = 0; i < oeuvreIds.length; i++) {
+    const oeuvreId = oeuvreIds[i]
+    const quantity = quantities[i] ?? 1
+    const oeuvre   = oeuvres?.find((o) => o.id === oeuvreId)
+    const orderNumber = `OTTO-${new Date().getFullYear()}-${String(baseCount + i + 1).padStart(4, '0')}`
+
+    const { data: commande, error } = await supabase.from('commandes').insert({
+      order_number:             orderNumber,
+      buyer_name:               buyerName,
+      buyer_email:              buyerEmail,
+      buyer_phone:              buyerPhone,
+      shipping_address:         shipping_address,
+      oeuvre_id:                oeuvreId,
+      stripe_session_id:        session.id,
+      stripe_payment_intent_id: typeof session.payment_intent === 'string' ? session.payment_intent : null,
+      amount_subtotal:          (oeuvre?.price ?? 0) * quantity,
+      amount_shipping:          i === 0 ? shippingCost : 0, // frais sur la 1ère commande
+      amount_total:             (oeuvre?.price ?? 0) * quantity + (i === 0 ? shippingCost : 0),
+      status:                   'paid',
+    }).select().single()
+
+    if (error) { console.error(`Failed to create commande for ${oeuvreId}:`, error); continue }
+    createdCommandes.push({ commande, oeuvre })
+
+    // Décrémente le stock, passe en vendu si stock = 0
+    const { data: oeuvreStock } = await supabase
+      .from('oeuvres').select('stock').eq('id', oeuvreId).single()
+    const newStock = Math.max(0, (oeuvreStock?.stock ?? 1) - quantity)
+    await supabase.from('oeuvres')
+      .update({ stock: newStock, statut: newStock === 0 ? 'vendu' : 'reserve', updated_at: new Date().toISOString() })
+      .eq('id', oeuvreId)
   }
 
-  // Passe l'œuvre en "reserve"
-  await supabase
-    .from('oeuvres')
-    .update({ statut: 'reserve', updated_at: new Date().toISOString() })
-    .eq('id', oeuvreId)
+  if (!createdCommandes.length) return
 
   // Emails
   const resend = new Resend(process.env.RESEND_API_KEY)
+  const oeuvreTitles = createdCommandes.map((c) => c.oeuvre?.title ?? '?').join(', ')
+  const orderNumbers = createdCommandes.map((c) => c.commande.order_number).join(', ')
+  const firstOrder   = createdCommandes[0].commande
 
-  const buyerName  = commande.buyer_name
-  const buyerEmail = commande.buyer_email
-  const oeuvreTitle = oeuvre?.title ?? 'votre œuvre'
-  const totalStr    = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format((commande.amount_total ?? 0) / 100)
-
-  // Email acheteur
   await resend.emails.send({
     from:    process.env.EMAIL_FROM!,
     to:      buyerEmail,
-    subject: `Commande confirmée — ${orderNumber}`,
-    html:    buildBuyerEmail({ buyerName, orderNumber, oeuvreTitle, totalStr, oeuvreSlug }),
+    subject: `Commande confirmée — ${firstOrder.order_number}`,
+    html:    buildBuyerEmail({ buyerName, orderNumbers, oeuvreTitles, totalStr }),
   }).catch((e) => console.error('Buyer email failed:', e))
 
-  // Email Otto
   await resend.emails.send({
     from:    process.env.EMAIL_FROM!,
     to:      process.env.EMAIL_OTTO!,
-    subject: `Nouvelle commande ${orderNumber} — ${oeuvreTitle}`,
-    html:    buildOttoEmail({ orderNumber, buyerName, buyerEmail, oeuvreTitle, totalStr, shipping_address }),
+    subject: `Nouvelle commande — ${oeuvreTitles}`,
+    html:    buildOttoEmail({ orderNumbers, buyerName, buyerEmail, oeuvreTitles, totalStr, shipping_address }),
   }).catch((e) => console.error('Otto email failed:', e))
 }
 
-function buildBuyerEmail({ buyerName, orderNumber, oeuvreTitle, totalStr, oeuvreSlug }: any) {
+function buildBuyerEmail({ buyerName, orderNumbers, oeuvreTitles, totalStr }: any) {
   return `
     <div style="font-family: monospace; max-width: 560px; margin: 0 auto; padding: 40px 20px; background: #060606; color: #F2F0EB;">
       <h1 style="font-size: 28px; font-weight: 300; margin-bottom: 8px; letter-spacing: 0.05em;">Merci.</h1>
-      <p style="color: #8A8A8A; font-size: 11px; text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 40px;">${orderNumber}</p>
+      <p style="color: #8A8A8A; font-size: 11px; text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 40px;">${orderNumbers}</p>
       <p style="margin-bottom: 8px;">Bonjour ${buyerName},</p>
       <p style="color: #8A8A8A; margin-bottom: 32px;">
-        Votre commande pour <strong style="color: #F2F0EB;">${oeuvreTitle}</strong> a bien été reçue.
+        Votre commande pour <strong style="color: #F2F0EB;">${oeuvreTitles}</strong> a bien été reçue.
         Montant total&nbsp;: <strong style="color: #fff;">${totalStr}</strong>
       </p>
       <p style="margin-bottom: 32px; color: #8A8A8A; font-size: 14px; line-height: 1.8;">
-        Otto emballera votre œuvre avec soin et vous enverra le numéro de suivi par email
-        dès qu'elle sera expédiée. Comptez 5 à 7 jours ouvrés.
+        Otto emballera vos œuvres avec soin et vous enverra le numéro de suivi par email
+        dès qu'elles seront expédiées. Comptez 5 à 7 jours ouvrés.
       </p>
-      <p style="font-size: 13px; color: #8A8A8A; margin-bottom: 4px;">Un certificat d'authenticité est inclus.</p>
+      <p style="font-size: 13px; color: #8A8A8A; margin-bottom: 4px;">Un certificat d'authenticité est inclus pour chaque œuvre.</p>
       <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 40px 0;" />
       <p style="color: #8A8A8A; font-size: 11px; text-transform: uppercase; letter-spacing: 0.2em;">OTTO · Eaubonne · ottodrewit.com</p>
     </div>
   `
 }
 
-function buildOttoEmail({ orderNumber, buyerName, buyerEmail, oeuvreTitle, totalStr, shipping_address }: any) {
+function buildOttoEmail({ orderNumbers, buyerName, buyerEmail, oeuvreTitles, totalStr, shipping_address }: any) {
   const addrStr = shipping_address
     ? `${shipping_address.line1}${shipping_address.line2 ? ', ' + shipping_address.line2 : ''}, ${shipping_address.postal_code} ${shipping_address.city}, ${shipping_address.country}`
     : 'Non fournie'
@@ -143,14 +157,14 @@ function buildOttoEmail({ orderNumber, buyerName, buyerEmail, oeuvreTitle, total
   return `
     <div style="font-family: monospace; max-width: 560px; margin: 0 auto; padding: 40px 20px; background: #060606; color: #F2F0EB;">
       <h1 style="font-size: 24px; font-weight: 300; margin-bottom: 8px;">Nouvelle commande</h1>
-      <p style="color: #8A8A8A; font-size: 11px; text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 32px;">${orderNumber}</p>
+      <p style="color: #8A8A8A; font-size: 11px; text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 32px;">${orderNumbers}</p>
       <table style="width: 100%; border-collapse: collapse;">
         ${[
-          ['Œuvre',   oeuvreTitle],
+          ['Œuvres',   oeuvreTitles],
           ['Acheteur', buyerName],
-          ['Email',   buyerEmail],
-          ['Montant', totalStr],
-          ['Adresse', addrStr],
+          ['Email',    buyerEmail],
+          ['Montant',  totalStr],
+          ['Adresse',  addrStr],
         ].map(([label, value]) => `
           <tr>
             <td style="padding: 8px 0; color: #8A8A8A; font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em; width: 100px;">${label}</td>

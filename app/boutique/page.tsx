@@ -5,7 +5,7 @@ import FadeIn from '@/components/FadeIn'
 import OeuvreCard from '@/components/OeuvreCard'
 import { createAdminClient } from '@/lib/supabase-server'
 import { oeuvres as staticOeuvres } from '@/data/oeuvres'
-import type { Oeuvre, Categorie } from '@/lib/types'
+import type { Oeuvre } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,14 +13,6 @@ export const metadata: Metadata = {
   title: 'Boutique',
   description: 'Acquérir une œuvre originale d\'Otto. Peintures sur toile noire, danseuses et corbeaux.',
 }
-
-const CATEGORIES: { value: Categorie | 'all'; label: string }[] = [
-  { value: 'all',          label: 'Tout' },
-  { value: 'danseuses',    label: 'Danseuses' },
-  { value: 'corbeaux',     label: 'Corbeaux' },
-  { value: 'silhouettes',  label: 'Silhouettes' },
-  { value: 'etudes',       label: 'Études' },
-]
 
 async function getOeuvres(): Promise<Oeuvre[]> {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
@@ -45,7 +37,10 @@ interface Props {
 
 export default async function BoutiquePage({ searchParams }: Props) {
   const all = await getOeuvres()
-  const activeCategorie = searchParams.categorie as Categorie | undefined
+  const activeCategorie = searchParams.categorie
+
+  // Catégories dynamiques depuis les œuvres existantes
+  const categories = Array.from(new Set(all.map((o) => o.categorie).filter(Boolean))).sort()
 
   const filtered = activeCategorie
     ? all.filter((o) => o.categorie === activeCategorie)
@@ -78,26 +73,28 @@ export default async function BoutiquePage({ searchParams }: Props) {
         {/* ── Filtres ── */}
         <FadeIn delay={80}>
           <div className="flex flex-wrap gap-x-10 gap-y-4 mb-16 border-t border-white/5 pt-10 items-baseline">
-            {CATEGORIES.map(({ value, label }) => {
-              const isActive = value === 'all'
-                ? !activeCategorie
-                : activeCategorie === value
-
-              return (
-                <a
-                  key={value}
-                  href={value === 'all' ? '/boutique' : `/boutique?categorie=${value}`}
-                  data-active={isActive ? 'true' : undefined}
-                  className={`chalk-under font-mono text-[10px] uppercase tracking-[0.25em] transition-colors duration-200 ${
-                    isActive
-                      ? 'text-otto-chalk'
-                      : 'text-otto-grey hover:text-otto-chalk'
-                  }`}
-                >
-                  {label}
-                </a>
-              )
-            })}
+            {/* Tout */}
+            <a
+              href="/boutique"
+              data-active={!activeCategorie ? 'true' : undefined}
+              className={`chalk-under font-mono text-[10px] uppercase tracking-[0.25em] transition-colors duration-200 ${
+                !activeCategorie ? 'text-otto-chalk' : 'text-otto-grey hover:text-otto-chalk'
+              }`}
+            >
+              Tout
+            </a>
+            {categories.map((cat) => (
+              <a
+                key={cat}
+                href={`/boutique?categorie=${encodeURIComponent(cat)}`}
+                data-active={activeCategorie === cat ? 'true' : undefined}
+                className={`chalk-under font-mono text-[10px] uppercase tracking-[0.25em] transition-colors duration-200 ${
+                  activeCategorie === cat ? 'text-otto-chalk' : 'text-otto-grey hover:text-otto-chalk'
+                }`}
+              >
+                {cat}
+              </a>
+            ))}
           </div>
         </FadeIn>
 

@@ -10,8 +10,9 @@ import type { Oeuvre } from '@/lib/types'
 
 export default function EditOeuvrePage() {
   const { id }            = useParams<{ id: string }>()
-  const [oeuvre, setOeuvre] = useState<Oeuvre | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [oeuvre, setOeuvre]       = useState<Oeuvre | null>(null)
+  const [categories, setCategories] = useState<string[]>([])
+  const [loading, setLoading]     = useState(true)
   const [, start] = useTransition()
 
   useEffect(() => {
@@ -21,8 +22,13 @@ export default function EditOeuvrePage() {
         return
       }
       const supabase = createClient()
-      const { data } = await supabase.from('oeuvres').select('*').eq('id', id).single()
+      const [{ data }, { data: cats }] = await Promise.all([
+        supabase.from('oeuvres').select('*').eq('id', id).single(),
+        supabase.from('oeuvres').select('categorie'),
+      ])
       setOeuvre(data)
+      const unique = Array.from(new Set((cats ?? []).map((o: any) => o.categorie).filter(Boolean)))
+      setCategories(unique)
       setLoading(false)
     }
     load()
@@ -56,6 +62,7 @@ export default function EditOeuvrePage() {
         <OeuvreForm
           mode="edit"
           oeuvre={oeuvre ?? undefined}
+          categories={categories}
           onSubmit={(fd) => updateOeuvre(id, fd)}
           onDelete={() => {
             start(async () => { await deleteOeuvre(id) })

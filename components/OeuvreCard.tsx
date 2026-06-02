@@ -1,6 +1,9 @@
+'use client'
+
 import Link from 'next/link'
 import Image from 'next/image'
 import { formatPrice } from '@/lib/format'
+import { useCart } from '@/lib/cart'
 
 const glowClass: Record<string, string> = {
   danseuses:   'glow-dancer',
@@ -10,18 +13,35 @@ const glowClass: Record<string, string> = {
 }
 
 export default function OeuvreCard({ oeuvre }: { oeuvre: any }) {
+  const { addItem, items } = useCart()
   const isSketch  = oeuvre.categorie === 'etudes'
   const imageUrl  = oeuvre.images?.[0] ?? oeuvre.imagePath ?? null
   const statut    = oeuvre.statut
+  const cartItem  = items.find((i) => i.id === oeuvre.id)
+  const inCart    = !!cartItem
+  const atMax     = inCart && cartItem!.quantity >= (oeuvre.stock ?? 1)
+
+  function handleAddToCart(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (statut !== 'disponible' || inCart) return
+    addItem({
+      id:        oeuvre.id,
+      slug:      oeuvre.slug,
+      title:     oeuvre.title,
+      price:     oeuvre.price,
+      image:     imageUrl,
+      technique: oeuvre.technique,
+      format:    oeuvre.format,
+      quantity:  1,
+      stock:     oeuvre.stock ?? 1,
+    })
+  }
 
   return (
     <Link href={`/oeuvre/${oeuvre.slug}`} className="block group">
-      {/* Image zone — cadre tableau */}
-      <div
-        className={`frame relative overflow-hidden aspect-[4/5] ${
-          isSketch ? 'bg-otto-paper' : ''
-        }`}
-      >
+      {/* Image zone */}
+      <div className={`frame relative overflow-hidden aspect-[4/5] ${isSketch ? 'bg-otto-paper' : ''}`}>
         {imageUrl ? (
           <Image
             src={imageUrl}
@@ -34,30 +54,37 @@ export default function OeuvreCard({ oeuvre }: { oeuvre: any }) {
           <div className={`absolute inset-0 ${glowClass[oeuvre.categorie] ?? ''}`} />
         )}
 
-        {/* Étiquette de stock — coin haut droit */}
+        {/* Statut */}
         {statut === 'disponible' && (
-          <span
-            className={`absolute top-3.5 right-3.5 font-mono text-[9px] uppercase tracking-[0.3em] ${
-              isSketch ? 'text-otto-black/70' : 'text-otto-chalk/80'
-            }`}
-          >
+          <span className={`absolute top-3.5 right-3.5 font-mono text-[9px] uppercase tracking-[0.3em] ${isSketch ? 'text-otto-black/70' : 'text-otto-chalk/80'}`}>
             Dispo
           </span>
         )}
         {(statut === 'vendu' || statut === 'reserve') && (
-          <span
-            className={`absolute top-3.5 right-3.5 font-mono text-[9px] uppercase tracking-[0.3em] ${
-              isSketch ? 'text-otto-black/40' : 'text-otto-grey/60'
-            }`}
-          >
+          <span className={`absolute top-3.5 right-3.5 font-mono text-[9px] uppercase tracking-[0.3em] ${isSketch ? 'text-otto-black/40' : 'text-otto-grey/60'}`}>
             {statut === 'vendu' ? 'Vendu' : 'Réservé'}
           </span>
         )}
 
         {/* Hover overlay */}
-        <div className="absolute inset-0 bg-otto-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-5">
-          <p className="font-serif italic text-otto-chalk text-lg leading-tight">{oeuvre.title}</p>
-          <p className="font-mono text-otto-grey text-[10px] uppercase tracking-[0.18em] mt-1">{oeuvre.year}</p>
+        <div className="absolute inset-0 bg-otto-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-between p-5">
+          <div />
+          <div>
+            <p className="font-serif italic text-otto-chalk text-lg leading-tight">{oeuvre.title}</p>
+            <p className="font-mono text-otto-grey text-[10px] uppercase tracking-[0.18em] mt-1">{oeuvre.year}</p>
+          </div>
+          {statut === 'disponible' && oeuvre.id && (
+            <button
+              onClick={handleAddToCart}
+              className={`mt-3 w-full font-mono text-[9px] uppercase tracking-[0.2em] py-2.5 border transition-all duration-200 ${
+                atMax
+                  ? 'border-white/10 text-otto-grey/50 cursor-default'
+                  : 'border-white/30 text-otto-chalk hover:bg-white/10 hover:border-white/50'
+              }`}
+            >
+              {atMax ? 'Max atteint' : inCart ? `+ Ajouter (${cartItem!.quantity})` : '+ Ajouter au panier'}
+            </button>
+          )}
         </div>
       </div>
 

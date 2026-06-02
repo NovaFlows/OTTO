@@ -4,17 +4,24 @@ import { useState, useRef, useTransition } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { Oeuvre } from '@/lib/types'
 
+const DEFAULT_CATEGORIES = ['danseuses', 'corbeaux', 'silhouettes', 'etudes']
+
 interface Props {
   oeuvre?: Oeuvre
   onSubmit: (formData: FormData) => Promise<{ error?: string } | void>
   onDelete?: () => void
   mode: 'create' | 'edit'
+  categories?: string[]
 }
-
-const CATEGORIES = ['danseuses', 'corbeaux', 'silhouettes', 'etudes']
 const STATUTS    = ['disponible', 'vendu', 'reserve', 'nfs', 'brouillon']
 
-export default function OeuvreForm({ oeuvre, onSubmit, onDelete, mode }: Props) {
+export default function OeuvreForm({ oeuvre, onSubmit, onDelete, mode, categories }: Props) {
+  const allCategories = Array.from(new Set([...DEFAULT_CATEGORIES, ...(categories ?? [])]))
+
+  const isNewCat = oeuvre?.categorie && !allCategories.includes(oeuvre.categorie)
+  const [selectedCat, setSelectedCat]   = useState<string>(isNewCat ? '__new__' : (oeuvre?.categorie ?? allCategories[0]))
+  const [newCatValue, setNewCatValue]   = useState<string>(isNewCat ? (oeuvre?.categorie ?? '') : '')
+
   const [images, setImages]             = useState<string[]>(oeuvre?.images ?? [])
   const [uploading, setUploading]       = useState(false)
   const [dragOver, setDragOver]         = useState(false)
@@ -60,6 +67,13 @@ export default function OeuvreForm({ oeuvre, onSubmit, onDelete, mode }: Props) 
     setError(null)
     const fd = new FormData(e.currentTarget)
     fd.set('images', JSON.stringify(images))
+    // Catégorie : utilise la saisie libre si "nouvelle catégorie" est sélectionnée
+    if (selectedCat === '__new__') {
+      if (!newCatValue.trim()) { setError('Veuillez saisir un nom de catégorie.'); return }
+      fd.set('categorie', newCatValue.trim().toLowerCase())
+    } else {
+      fd.set('categorie', selectedCat)
+    }
     start(async () => {
       const result = await onSubmit(fd)
       if (result?.error) setError(result.error)
@@ -135,14 +149,26 @@ export default function OeuvreForm({ oeuvre, onSubmit, onDelete, mode }: Props) 
             Catégorie
           </label>
           <select
-            name="categorie"
-            defaultValue={oeuvre?.categorie ?? 'danseuses'}
+            value={selectedCat}
+            onChange={(e) => setSelectedCat(e.target.value)}
             className="w-full bg-otto-charcoal border border-white/10 px-4 py-3 font-mono text-[12px] text-otto-chalk focus:outline-none focus:border-white/30 transition-colors appearance-none"
           >
-            {CATEGORIES.map((c) => (
+            {allCategories.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
+            <option value="__new__">+ Nouvelle catégorie…</option>
           </select>
+
+          {selectedCat === '__new__' && (
+            <input
+              type="text"
+              value={newCatValue}
+              onChange={(e) => setNewCatValue(e.target.value)}
+              placeholder="Nom de la nouvelle catégorie"
+              autoFocus
+              className="mt-2 w-full bg-otto-charcoal border border-white/20 px-4 py-3 font-mono text-[12px] text-otto-chalk placeholder-otto-grey/30 focus:outline-none focus:border-white/40 transition-colors"
+            />
+          )}
         </div>
 
         <div>
@@ -171,6 +197,13 @@ export default function OeuvreForm({ oeuvre, onSubmit, onDelete, mode }: Props) 
         <Field label="Technique" name="technique" defaultValue={oeuvre?.technique} required />
         <Field label="Format (ex: 80 × 100 cm)" name="format" defaultValue={oeuvre?.format} required />
         <Field label="Poids en grammes" name="weight_grams" type="number" defaultValue={oeuvre?.weight_grams} placeholder="500" />
+        <Field
+          label="Stock (exemplaires disponibles)"
+          name="stock"
+          type="number"
+          defaultValue={oeuvre?.stock ?? 1}
+          placeholder="1"
+        />
 
         <div className="md:col-span-2">
           <label className="block font-mono text-[9px] text-otto-grey uppercase tracking-[0.2em] mb-2">

@@ -5,7 +5,7 @@ import Nav from '@/components/Nav'
 import Footer from '@/components/Footer'
 import FadeIn from '@/components/FadeIn'
 import OeuvreCard from '@/components/OeuvreCard'
-import BuyButton from '@/components/BuyButton'
+import AddToCartButton from '@/components/AddToCartButton'
 import ChalkDivider from '@/components/ChalkDivider'
 import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase-server'
@@ -190,7 +190,7 @@ export default async function OeuvreDetailPage({ params }: Props) {
                       {formatPrice((oeuvre as any).price)}
                     </p>
                   )}
-                  <BuyButton oeuvreId={(oeuvre as any).id ?? (oeuvre as any).slug} />
+                  <AddToCartButton oeuvre={oeuvre as any} />
                   <p className="font-mono text-otto-grey/50 text-[9px] uppercase tracking-[0.15em] text-center leading-relaxed">
                     Envoi soigné sous 5–7 jours · Certificat d&apos;authenticité inclus
                   </p>

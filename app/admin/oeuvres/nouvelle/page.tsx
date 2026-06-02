@@ -2,14 +2,28 @@ import type { Metadata } from 'next'
 import AdminNav from '@/components/AdminNav'
 import OeuvreForm from '@/components/OeuvreForm'
 import { createOeuvre } from '@/lib/actions'
+import { createAdminClient } from '@/lib/supabase-server'
 
 export const metadata: Metadata = { title: 'Nouvelle œuvre' }
 
-export default function NouvelleOeuvrePage() {
+async function getCategories(): Promise<string[]> {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return []
+  try {
+    const supabase = await createAdminClient()
+    const { data } = await supabase.from('oeuvres').select('categorie')
+    const unique = Array.from(new Set((data ?? []).map((o) => o.categorie).filter(Boolean)))
+    return unique
+  } catch {
+    return []
+  }
+}
+
+export default async function NouvelleOeuvrePage() {
+  const categories = await getCategories()
+
   return (
     <div>
       <AdminNav />
-
       <main className="max-w-4xl mx-auto px-6 py-10">
         <div className="mb-10">
           <p className="font-mono text-[9px] text-otto-grey uppercase tracking-[0.2em] mb-1">
@@ -19,8 +33,7 @@ export default function NouvelleOeuvrePage() {
             Ajouter une œuvre
           </h1>
         </div>
-
-        <OeuvreForm mode="create" onSubmit={createOeuvre} />
+        <OeuvreForm mode="create" onSubmit={createOeuvre} categories={categories} />
       </main>
     </div>
   )

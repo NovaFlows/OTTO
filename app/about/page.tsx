@@ -3,33 +3,42 @@ import Nav from '@/components/Nav'
 import Footer from '@/components/Footer'
 import FadeIn from '@/components/FadeIn'
 import ChalkDivider from '@/components/ChalkDivider'
+import { createAdminClient } from '@/lib/supabase-server'
+import type { Interview } from '@/lib/types'
+
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'About',
   description: 'Otto — Peintre autodidacte. Eaubonne, banlieue parisienne.',
 }
 
-/* ── Q&A à remplacer par la vraie interview ── */
-const INTERVIEW = [
-  {
-    q: "Tu n'as jamais vu de danseuses classiques en vrai. Comment on peint ce qu'on n'a pas vécu ?",
-    a: "En l'inventant. Je ne cherche pas la réalité — je cherche le mouvement. Ce que je veux capturer, c'est l'énergie, pas la photographie d'un corps.",
-  },
-  {
-    q: "Pourquoi le fond noir systématiquement ?",
-    a: "Parce que la lumière n'existe que grâce au noir. Sur blanc, j'enlève de la lumière. Sur noir, j'en crée. C'est pas pareil.",
-  },
-  {
-    q: "Et les corbeaux — c'est quoi ce lien avec les danseuses ?",
-    a: "La danseuse c'est la grâce, le corbeau c'est la noirceur. Les deux m'appartiennent. Je peux pas avoir l'un sans l'autre.",
-  },
-  {
-    q: "Tu te vois où dans cinq ans ?",
-    a: "Avec de grandes toiles. Des salles entières. Que les gens rentrent dedans et qu'ils se sentent à l'intérieur de la peinture.",
-  },
-]
+async function getInterviews(): Promise<Interview[]> {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return []
+  try {
+    const supabase = await createAdminClient()
+    const { data } = await supabase
+      .from('interviews')
+      .select('*')
+      .eq('published', true)
+      .order('published_at', { ascending: false })
+    return data ?? []
+  } catch {
+    return []
+  }
+}
 
-export default function AboutPage() {
+function isYouTubeEmbed(url: string) {
+  return url.includes('youtube.com/embed/')
+}
+
+function isDirectFile(item: Interview) {
+  return item.source === 'fichier' || /\.(mp4|mov|webm|avi)(\?|$)/i.test(item.video_url)
+}
+
+export default async function AboutPage() {
+  const interviews = await getInterviews()
+
   return (
     <main className="min-h-screen bg-otto-black">
       <Nav />
@@ -112,46 +121,101 @@ export default function AboutPage() {
           </div>
         </FadeIn>
 
-        {/* ── INTERVIEW ── */}
-        <ChalkDivider />
-        <div id="interview" className="pt-16 mb-20">
-          <FadeIn>
-            <div className="flex items-baseline justify-between mb-16">
-              <p className="font-mono text-otto-grey text-[11px] uppercase tracking-[0.3em]">
-                Interview
-              </p>
-              <p className="font-mono text-otto-grey/30 text-[10px] tracking-[0.15em]">
-                2025
-              </p>
-            </div>
-          </FadeIn>
-
-          <div className="max-w-2xl space-y-0">
-            {INTERVIEW.map(({ q, a }, i) => (
-              <FadeIn key={i} delay={i * 80}>
-                <div className="border-t border-white/8 py-12">
-                  {/* Question */}
-                  <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-otto-grey leading-relaxed mb-8">
-                    {q}
-                  </p>
-                  {/* Réponse */}
-                  <blockquote
-                    className="font-serif italic text-otto-chalk pl-6 border-l border-white/12 leading-snug"
-                    style={{ fontSize: 'clamp(20px, 2.5vw, 30px)' }}
-                  >
-                    « {a} »
-                  </blockquote>
-                </div>
+        {/* ── INTERVIEWS ── */}
+        {interviews.length > 0 && (
+          <>
+            <ChalkDivider />
+            <div id="interviews" className="pt-16 mb-20">
+              <FadeIn>
+                <p className="font-mono text-otto-grey text-[11px] uppercase tracking-[0.3em] mb-16">
+                  Interviews
+                </p>
               </FadeIn>
-            ))}
-            {/* Dernière bordure */}
-            <div className="border-t border-white/8" />
-          </div>
-        </div>
+
+              <div className="space-y-20">
+                {interviews.map((item, i) => (
+                  <FadeIn key={item.id} delay={i * 80}>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start border-t border-white/8 pt-12">
+
+                      {/* Vidéo ou miniature */}
+                      <div className="w-full aspect-video bg-otto-charcoal relative overflow-hidden">
+                        {isYouTubeEmbed(item.video_url) ? (
+                          <iframe
+                            src={item.video_url}
+                            title={item.title}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                            className="absolute inset-0 w-full h-full"
+                          />
+                        ) : isDirectFile(item) ? (
+                          <video
+                            src={item.video_url}
+                            controls
+                            className="absolute inset-0 w-full h-full object-cover"
+                            poster={item.thumbnail_url ?? undefined}
+                          />
+                        ) : item.thumbnail_url ? (
+                          <a href={item.video_url} target="_blank" rel="noopener noreferrer" className="block w-full h-full">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={item.thumbnail_url} alt={item.title} className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/10 transition-colors">
+                              <div className="w-12 h-12 border border-white/40 flex items-center justify-center">
+                                <span className="text-white/80 text-lg ml-1">▶</span>
+                              </div>
+                            </div>
+                          </a>
+                        ) : (
+                          <a href={item.video_url} target="_blank" rel="noopener noreferrer"
+                            className="absolute inset-0 flex flex-col items-center justify-center gap-3 hover:bg-white/4 transition-colors">
+                            <div className="w-12 h-12 border border-white/20 flex items-center justify-center">
+                              <span className="text-white/50 text-lg ml-1">▶</span>
+                            </div>
+                            <p className="font-mono text-[9px] text-otto-grey uppercase tracking-[0.15em]">Voir sur {item.source}</p>
+                          </a>
+                        )}
+                      </div>
+
+                      {/* Texte */}
+                      <div className="flex flex-col justify-center">
+                        <p className="font-mono text-otto-grey text-[10px] uppercase tracking-[0.2em] mb-4">
+                          {new Date(item.published_at).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+                          {' · '}{item.source}
+                        </p>
+                        <h2
+                          className="font-serif font-light italic text-otto-chalk leading-snug mb-6"
+                          style={{ fontSize: 'clamp(22px, 2.5vw, 32px)' }}
+                        >
+                          {item.title}
+                        </h2>
+                        {item.description && (
+                          <p className="font-sans text-otto-chalk/60 text-[14px] leading-relaxed mb-8">
+                            {item.description}
+                          </p>
+                        )}
+                        {!isYouTubeEmbed(item.video_url) && (
+                          <a
+                            href={item.video_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono text-[10px] text-otto-grey hover:text-otto-chalk uppercase tracking-[0.18em] transition-colors link-underline w-fit"
+                          >
+                            Voir l&apos;interview ↗
+                          </a>
+                        )}
+                      </div>
+
+                    </div>
+                  </FadeIn>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
 
         {/* ── Réseaux ── */}
         <FadeIn>
-          <div className="flex flex-wrap gap-10">
+          <ChalkDivider />
+          <div className="flex flex-wrap gap-10 pt-16">
             <a
               href="https://www.instagram.com/ottodrewit/"
               target="_blank"

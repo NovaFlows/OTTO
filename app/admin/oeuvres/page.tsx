@@ -21,7 +21,7 @@ async function getAllOeuvres() {
     const supabase = await createAdminClient()
     const { data } = await supabase
       .from('oeuvres')
-      .select('id, slug, title, categorie, statut, price, year, created_at')
+      .select('id, slug, title, categorie, statut, stock, price, year, is_featured, created_at')
       .order('created_at', { ascending: false })
     return data ?? (staticOeuvres as any[])
   } catch {
@@ -54,7 +54,7 @@ export default async function AdminOeuvresPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-white/8">
-                {['Titre', 'Catégorie', 'Format', 'Prix', 'Statut', 'Année', ''].map((h) => (
+                {['Titre', 'Catégorie', 'Prix', 'Stock', 'Statut', 'Accueil', 'Année', ''].map((h) => (
                   <th key={h} className="px-5 py-3 text-left font-mono text-[9px] text-otto-grey uppercase tracking-[0.15em]">
                     {h}
                   </th>
@@ -75,9 +75,11 @@ export default async function AdminOeuvresPage() {
                   <td className="px-5 py-4 font-mono text-[10px] text-otto-grey uppercase tracking-[0.1em]">
                     {o.categorie}
                   </td>
-                  <td className="px-5 py-4 font-mono text-[11px] text-otto-grey">{o.format ?? '—'}</td>
                   <td className="px-5 py-4 font-mono text-[12px] text-otto-chalk">
                     {o.price ? formatPrice(o.price) : '—'}
+                  </td>
+                  <td className="px-5 py-4 font-mono text-[12px] text-otto-chalk">
+                    {o.stock ?? 1}
                   </td>
                   <td className="px-5 py-4">
                     <span className={`font-mono text-[10px] uppercase tracking-[0.1em] ${
@@ -87,6 +89,13 @@ export default async function AdminOeuvresPage() {
                     }`}>
                       {STATUT_LABEL[o.statut] ?? o.statut}
                     </span>
+                  </td>
+                  <td className="px-5 py-4 font-mono text-[11px] text-center">
+                    {o.is_featured ? (
+                      <span className="text-otto-chalk">★</span>
+                    ) : (
+                      <span className="text-otto-grey/30">—</span>
+                    )}
                   </td>
                   <td className="px-5 py-4 font-mono text-[11px] text-otto-grey">{o.year}</td>
                   <td className="px-5 py-4">

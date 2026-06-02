@@ -1,4 +1,4 @@
-export type Categorie = 'danseuses' | 'corbeaux' | 'silhouettes' | 'etudes'
+export type Categorie = string
 export type StatutOeuvre = 'disponible' | 'vendu' | 'reserve' | 'nfs' | 'brouillon'
 export type StatutCommande = 'pending' | 'paid' | 'preparing' | 'shipped' | 'delivered' | 'cancelled'
 export type ZoneLivraison = 'france' | 'europe' | 'world'
@@ -14,6 +14,7 @@ export interface Oeuvre {
   categorie: Categorie
   price: number
   weight_grams: number
+  stock: number
   statut: StatutOeuvre
   images: string[]
   is_featured: boolean
@@ -49,6 +50,20 @@ export interface Commande {
   notes: string | null
   created_at: string
   updated_at: string
+}
+
+export type InterviewSource = 'youtube' | 'tiktok' | 'instagram' | 'fichier' | 'autre'
+
+export interface Interview {
+  id: string
+  title: string
+  source: InterviewSource
+  video_url: string
+  thumbnail_url: string | null
+  description: string | null
+  published_at: string
+  published: boolean
+  created_at: string
 }
 
 export interface ShippingRate {

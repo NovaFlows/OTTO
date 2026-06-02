@@ -5,6 +5,59 @@ import { revalidatePath } from 'next/cache'
 import { createClient, createAdminClient } from '@/lib/supabase-server'
 import { getStripe, SHIPPING_OPTIONS } from '@/lib/stripe'
 import type { Oeuvre, StatutOeuvre } from '@/lib/types'
+import type { CartItem } from '@/lib/cart'
+
+/* ── Checkout panier (multi-articles) ── */
+
+export async function createCartCheckoutSession(items: CartItem[]) {
+  if (!items.length) throw new Error('Le panier est vide.')
+
+  const supabase = await createAdminClient()
+
+  // Vérifie que toutes les œuvres sont encore disponibles
+  const { data: oeuvres, error } = await supabase
+    .from('oeuvres')
+    .select('id, title, statut')
+    .in('id', items.map((i) => i.id))
+
+  if (error) throw new Error('Erreur lors de la vérification des œuvres.')
+
+  const unavailable = oeuvres?.filter((o) => o.statut !== 'disponible') ?? []
+  if (unavailable.length > 0) {
+    throw new Error(`Ces œuvres ne sont plus disponibles : ${unavailable.map((o) => o.title).join(', ')}`)
+  }
+
+  const session = await getStripe().checkout.sessions.create({
+    mode: 'payment',
+    line_items: items.map((item) => ({
+      price_data: {
+        currency: 'eur',
+        product_data: {
+          name: item.title,
+          description: `${item.technique} — ${item.format}`,
+          ...(item.image ? { images: [item.image] } : {}),
+        },
+        unit_amount: item.price,
+      },
+      quantity: 1,
+    })),
+    shipping_address_collection: {
+      allowed_countries: ['FR', 'BE', 'CH', 'LU', 'MC', 'DE', 'ES', 'IT', 'PT', 'NL', 'AT', 'GB', 'US', 'CA', 'JP', 'AU'],
+    },
+    shipping_options: SHIPPING_OPTIONS,
+    phone_number_collection: { enabled: true },
+    metadata: {
+      oeuvre_ids:        items.map((i) => i.id).join(','),
+      oeuvre_slugs:      items.map((i) => i.slug).join(','),
+      oeuvre_quantities: items.map((i) => i.quantity).join(','),
+    },
+    success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/merci?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url:  `${process.env.NEXT_PUBLIC_SITE_URL}/boutique`,
+    locale: 'fr',
+  })
+
+  redirect(session.url!)
+}
 
 /* ── Checkout ── */
 
@@ -89,6 +142,7 @@ export async function createOeuvre(formData: FormData) {
     categorie:    formData.get('categorie') as string,
     price:        Math.round(Number(formData.get('price')) * 100),
     weight_grams: Number(formData.get('weight_grams')),
+    stock:        Math.max(0, Number(formData.get('stock')) || 1),
     statut:       formData.get('statut') as StatutOeuvre,
     images:       JSON.parse(formData.get('images') as string || '[]'),
     is_featured:  formData.get('is_featured') === 'true',
@@ -117,9 +171,10 @@ export async function updateOeuvre(id: string, formData: FormData) {
     technique:    formData.get('technique') as string,
     format:       formData.get('format') as string,
     year:         Number(formData.get('year')),
-    categorie:    formData.get('categorie') as any,
+    categorie:    formData.get('categorie') as Oeuvre['categorie'],
     price:        Math.round(Number(formData.get('price')) * 100),
     weight_grams: Number(formData.get('weight_grams')),
+    stock:        Math.max(0, Number(formData.get('stock')) || 1),
     statut:       formData.get('statut') as StatutOeuvre,
     images:       JSON.parse(formData.get('images') as string || '[]'),
     is_featured:  formData.get('is_featured') === 'true',
@@ -222,41 +277,83 @@ export async function addOrderNote(orderId: string, notes: string) {
   revalidatePath(`/admin/commandes/${orderId}`)
 }
 
-/* ── Contact ── */
+/* ── Interviews CRUD ── */
 
-export async function sendContactEmail(formData: FormData) {
-  const prenom  = (formData.get('prenom')  as string)?.trim()
-  const email   = (formData.get('email')   as string)?.trim()
-  const sujet   = (formData.get('sujet')   as string) ?? 'Autre'
-  const message = (formData.get('message') as string)?.trim()
+export async function createInterview(formData: FormData) {
+  const supabase = await createAdminClient()
 
-  if (!prenom || !email || !message) return { error: 'Merci de remplir tous les champs.' }
-
-  if (!process.env.RESEND_API_KEY) return { success: true }
-
-  try {
-    const { Resend } = await import('resend')
-    const resend = new Resend(process.env.RESEND_API_KEY)
-    await resend.emails.send({
-      from: process.env.EMAIL_FROM ?? 'Otto <noreply@ottodrewit.com>',
-      to:   process.env.EMAIL_OTTO ?? 'otto@ottodrewit.com',
-      replyTo: email,
-      subject: `[Contact] ${sujet} — ${prenom}`,
-      html: `
-        <div style="font-family:monospace;max-width:560px;margin:0 auto;padding:40px 20px;background:#060606;color:#F2F0EB;">
-          <p style="font-size:10px;text-transform:uppercase;letter-spacing:0.2em;color:#8A8A8A;margin-bottom:24px;">Nouveau message — ${sujet}</p>
-          <p style="margin-bottom:4px;"><strong>${prenom}</strong></p>
-          <p style="color:#8A8A8A;margin-bottom:32px;">${email}</p>
-          <p style="line-height:1.8;">${message.replace(/\n/g, '<br>')}</p>
-          <hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:40px 0;"/>
-          <p style="color:#8A8A8A;font-size:11px;">ottodrewit.com</p>
-        </div>
-      `,
-    })
-    return { success: true }
-  } catch {
-    return { success: true }
+  const videoUrl = normalizeVideoUrl(formData.get('video_url') as string)
+  const data = {
+    title:         formData.get('title') as string,
+    source:        resolveSource(videoUrl, formData.get('source') as string),
+    video_url:     videoUrl,
+    thumbnail_url: formData.get('thumbnail_url') as string || null,
+    description:   formData.get('description') as string || null,
+    published_at:  formData.get('published_at') as string,
+    published:     formData.get('published') === 'true',
   }
+
+  const { data: interview, error } = await supabase
+    .from('interviews')
+    .insert(data)
+    .select()
+    .single()
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/admin/interviews')
+  revalidatePath('/about')
+  redirect(`/admin/interviews/${interview.id}`)
+}
+
+export async function updateInterview(id: string, formData: FormData) {
+  const supabase = await createAdminClient()
+
+  const videoUrl = normalizeVideoUrl(formData.get('video_url') as string)
+  const data = {
+    title:         formData.get('title') as string,
+    source:        resolveSource(videoUrl, formData.get('source') as string),
+    video_url:     videoUrl,
+    thumbnail_url: formData.get('thumbnail_url') as string || null,
+    description:   formData.get('description') as string || null,
+    published_at:  formData.get('published_at') as string,
+    published:     formData.get('published') === 'true',
+  }
+
+  const { error } = await supabase.from('interviews').update(data).eq('id', id)
+  if (error) return { error: error.message }
+
+  revalidatePath('/admin/interviews')
+  revalidatePath('/about')
+  redirect(`/admin/interviews/${id}`)
+}
+
+export async function deleteInterview(id: string) {
+  const supabase = await createAdminClient()
+  const { error } = await supabase.from('interviews').delete().eq('id', id)
+  if (error) return { error: error.message }
+
+  revalidatePath('/admin/interviews')
+  revalidatePath('/about')
+  redirect('/admin/interviews')
+}
+
+function normalizeVideoUrl(url: string): string {
+  if (!url) return url
+  // Convertit https://www.youtube.com/watch?v=ID ou https://youtu.be/ID → embed URL
+  const watchMatch = url.match(/youtube\.com\/watch\?v=([\w-]+)/)
+  if (watchMatch) return `https://www.youtube.com/embed/${watchMatch[1]}`
+  const shortMatch = url.match(/youtu\.be\/([\w-]+)/)
+  if (shortMatch) return `https://www.youtube.com/embed/${shortMatch[1]}`
+  return url
+}
+
+function resolveSource(url: string, formSource: string): string {
+  // Si l'URL est un fichier vidéo direct (Supabase Storage ou extension vidéo), force 'fichier'
+  if (url.includes('/storage/') || /\.(mp4|mov|webm|avi|mkv)(\?|$)/i.test(url)) {
+    return 'fichier'
+  }
+  return formSource
 }
 
 /* ── Email helpers ── */

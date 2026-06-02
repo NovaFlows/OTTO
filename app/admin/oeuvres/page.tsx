@@ -15,21 +15,13 @@ const STATUT_LABEL: Record<string, string> = {
   brouillon:  'Brouillon',
 }
 
-const STATUT_COLOR: Record<string, string> = {
-  disponible: 'text-emerald-700 bg-emerald-50',
-  vendu:      'text-[#6e6d69] bg-black/5',
-  reserve:    'text-amber-700 bg-amber-50',
-  nfs:        'text-[#6e6d69] bg-black/5',
-  brouillon:  'text-[#6e6d69]/60 bg-black/[0.03] italic',
-}
-
 async function getAllOeuvres() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return staticOeuvres as any[]
   try {
     const supabase = await createAdminClient()
     const { data } = await supabase
       .from('oeuvres')
-      .select('id, slug, title, categorie, statut, price, year, created_at')
+      .select('id, slug, title, categorie, statut, stock, price, year, is_featured, created_at')
       .order('created_at', { ascending: false })
     return data ?? (staticOeuvres as any[])
   } catch {
@@ -47,26 +39,23 @@ export default async function AdminOeuvresPage() {
       <main className="max-w-7xl mx-auto px-6 py-10">
 
         <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="font-serif font-light text-2xl text-[#111]">Œuvres</h1>
-            <p className="font-mono text-[9px] text-[#6e6d69] uppercase tracking-[0.2em] mt-1">
-              {oeuvres.length} œuvre{oeuvres.length !== 1 ? 's' : ''}
-            </p>
-          </div>
+          <h1 className="font-mono text-[11px] text-otto-grey uppercase tracking-[0.25em]">
+            {oeuvres.length} œuvre{oeuvres.length !== 1 ? 's' : ''}
+          </h1>
           <Link
             href="/admin/oeuvres/nouvelle"
-            className="font-mono text-[10px] uppercase tracking-[0.18em] border border-black/20 px-5 py-3 text-[#111] hover:bg-black/[0.04] transition-all duration-200"
+            className="font-mono text-[10px] uppercase tracking-[0.18em] border border-white/20 px-5 py-3 text-otto-chalk hover:bg-white/5 transition-all duration-200"
           >
             + Ajouter
           </Link>
         </div>
 
-        <div className="bg-white border border-black/8">
+        <div className="border border-white/8">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-black/8">
-                {['Titre', 'Catégorie', 'Format', 'Prix', 'Statut', 'Année', ''].map((h) => (
-                  <th key={h} className="px-5 py-3 text-left font-mono text-[9px] text-[#6e6d69] uppercase tracking-[0.15em]">
+              <tr className="border-b border-white/8">
+                {['Titre', 'Catégorie', 'Prix', 'Stock', 'Statut', 'Accueil', 'Année', ''].map((h) => (
+                  <th key={h} className="px-5 py-3 text-left font-mono text-[9px] text-otto-grey uppercase tracking-[0.15em]">
                     {h}
                   </th>
                 ))}
@@ -74,40 +63,53 @@ export default async function AdminOeuvresPage() {
             </thead>
             <tbody>
               {oeuvres.map((o: any) => (
-                <tr key={o.id ?? o.slug} className="border-b border-black/5 hover:bg-black/[0.02] transition-colors">
+                <tr key={o.id ?? o.slug} className="border-b border-white/5 hover:bg-white/2 transition-colors">
                   <td className="px-5 py-4">
                     <Link
                       href={`/admin/oeuvres/${o.id ?? o.slug}`}
-                      className="font-mono text-[12px] text-[#111] hover:text-black link-underline font-medium"
+                      className="font-mono text-[12px] text-otto-chalk hover:text-otto-white link-underline"
                     >
                       {o.title}
                     </Link>
                   </td>
-                  <td className="px-5 py-4 font-mono text-[10px] text-[#6e6d69] uppercase tracking-[0.1em]">
+                  <td className="px-5 py-4 font-mono text-[10px] text-otto-grey uppercase tracking-[0.1em]">
                     {o.categorie}
                   </td>
-                  <td className="px-5 py-4 font-mono text-[11px] text-[#6e6d69]">{o.format ?? '—'}</td>
-                  <td className="px-5 py-4 font-mono text-[12px] text-[#111]">
+                  <td className="px-5 py-4 font-mono text-[12px] text-otto-chalk">
                     {o.price ? formatPrice(o.price) : '—'}
                   </td>
+                  <td className="px-5 py-4 font-mono text-[12px] text-otto-chalk">
+                    {o.stock ?? 1}
+                  </td>
                   <td className="px-5 py-4">
-                    <span className={`font-mono text-[9px] uppercase tracking-[0.1em] px-2 py-1 ${STATUT_COLOR[o.statut] ?? ''}`}>
+                    <span className={`font-mono text-[10px] uppercase tracking-[0.1em] ${
+                      o.statut === 'disponible' ? 'text-otto-chalk' :
+                      o.statut === 'brouillon'  ? 'text-otto-grey/50 italic' :
+                      'text-otto-grey/60'
+                    }`}>
                       {STATUT_LABEL[o.statut] ?? o.statut}
                     </span>
                   </td>
-                  <td className="px-5 py-4 font-mono text-[11px] text-[#6e6d69]">{o.year}</td>
+                  <td className="px-5 py-4 font-mono text-[11px] text-center">
+                    {o.is_featured ? (
+                      <span className="text-otto-chalk">★</span>
+                    ) : (
+                      <span className="text-otto-grey/30">—</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-4 font-mono text-[11px] text-otto-grey">{o.year}</td>
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-4">
                       <Link
                         href={`/admin/oeuvres/${o.id ?? o.slug}`}
-                        className="font-mono text-[9px] text-[#6e6d69] hover:text-[#111] uppercase tracking-[0.1em] transition-colors"
+                        className="font-mono text-[9px] text-otto-grey hover:text-otto-chalk uppercase tracking-[0.1em] transition-colors"
                       >
                         Modifier
                       </Link>
                       <Link
                         href={`/oeuvre/${o.slug}`}
                         target="_blank"
-                        className="font-mono text-[9px] text-[#6e6d69]/50 hover:text-[#6e6d69] uppercase tracking-[0.1em] transition-colors"
+                        className="font-mono text-[9px] text-otto-grey/50 hover:text-otto-grey uppercase tracking-[0.1em] transition-colors"
                       >
                         Voir ↗
                       </Link>
@@ -119,7 +121,7 @@ export default async function AdminOeuvresPage() {
           </table>
 
           {oeuvres.length === 0 && (
-            <p className="font-mono text-[#6e6d69]/40 text-[11px] text-center py-16 uppercase tracking-[0.15em]">
+            <p className="font-mono text-otto-grey/40 text-[11px] text-center py-16 uppercase tracking-[0.15em]">
               Aucune œuvre — commencez par en ajouter une.
             </p>
           )}

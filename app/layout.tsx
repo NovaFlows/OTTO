@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { Cormorant_Garamond, Inter, Space_Mono } from 'next/font/google'
 import BackgroundTraces from '@/components/BackgroundTraces'
 import ChalkAmbient from '@/components/ChalkAmbient'
+import CartDrawer from '@/components/CartDrawer'
+import { CartProvider } from '@/lib/cart'
 import './globals.css'
 
 const cormorant = Cormorant_Garamond({
@@ -59,7 +61,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <div className="grain-overlay" aria-hidden="true" />
         <BackgroundTraces />
         <ChalkAmbient />
-        {children}
+        <CartProvider>
+          {children}
+          <CartDrawer />
+        </CartProvider>
       </body>
     </html>
   )
